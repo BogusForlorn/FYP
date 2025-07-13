@@ -15,8 +15,10 @@ In another terminal, launch your ZAP Proxy daemon:
 zaproxy -daemon -config 'api.addrs.addr.name=.*' -config api.addrs.addr.regex=true -port 8080
 ```
 
+If you haven't got a vulnerable web application to test on, you can refer to my other repo for a simple, lightweight server you can use (https://github.com/BogusForlorn/vulnerable_web)
 
-I've run into a lot of issues developing and debuggng this project. If you face the following issues, you can do:
+
+I've run into a lot of issues developing and debugging this project. If you face the following issues, you can do:
 Unable to run node files
 ```
 npm init -y
