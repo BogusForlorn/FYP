@@ -5,26 +5,19 @@ import json
 import os
 import sys
 import re
+import glob
 
 MAX_SUMMARY_LEN = 300
 VERBOSE = True
 
-# default timeout (in seconds) for normal tools
 DEFAULT_TIMEOUT = 300
-# extended timeout for known long‑running tools (e.g., ffuf, sqlmap)
 LONG_TIMEOUT = 3600
-# if a command contains any of these substrings, use LONG_TIMEOUT
 LONG_TIMEOUT_TOOLS = ['ffuf', 'sqlmap', 'gobuster']
 
-# -----------------------
-# Run external tools
-# -----------------------
 def run_tool(command, capture=True, show_output=True):
-    # strip leading "$ "
     if command.startswith('$'):
         command = command[1:].strip()
 
-    # choose timeout
     timeout = DEFAULT_TIMEOUT
     for tool in LONG_TIMEOUT_TOOLS:
         if tool in command:
@@ -55,9 +48,6 @@ def run_tool(command, capture=True, show_output=True):
         print(f"[!] Error running command: {e}")
         return ""
 
-# -----------------------
-# HTML summarizer
-# -----------------------
 def strip_html_tags(text):
     return re.sub(r'<[^>]+>', '', text)
 
@@ -76,9 +66,6 @@ def summarize_page(html):
     summary = f"Content: {first}"
     return (summary[:MAX_SUMMARY_LEN] + '...') if len(summary) > MAX_SUMMARY_LEN else summary
 
-# -----------------------
-# JSON helpers
-# -----------------------
 def save_json(obj, path):
     try:
         with open(path, 'w') as f:
@@ -96,12 +83,8 @@ def load_json(path):
         print(f"[!] Failed loading {path}: {e}")
         return {}
 
-# -----------------------
-# Phase 0: Recon
-# -----------------------
 def zap_ajax_spider(target):
     print("[+] Starting ZAP AJAX Spider...")
-    # add Accept header to get JSON back
     zap_cmd = (
         f"curl -s "
         f"-H 'Accept: application/json' "
@@ -110,7 +93,6 @@ def zap_ajax_spider(target):
     out = run_tool(zap_cmd)
     try:
         js = json.loads(out)
-        # if ZAP returns {"code":...}, no scan key → bail
         scan = js.get('scan', {})
         return scan.get('urls', [])
     except Exception:
@@ -150,9 +132,6 @@ def phase_0_recon(target, aggressive, zap_urls):
     save_json(recon, 'recon.json')
     return recon
 
-# -----------------------
-# Loop 1: Manual injections
-# -----------------------
 def loop1_manual():
     print("[+] Loop 1: Manual injections")
     os.environ['PHASE'] = '1'
@@ -169,9 +148,6 @@ def loop1_manual():
     save_json(results, 'manual_results.json')
     return results
 
-# -----------------------
-# Loop 2: Aggressive brute
-# -----------------------
 def loop2_brute():
     print("[+] Loop 2: Aggressive brute")
     os.environ['PHASE'] = '2'
@@ -189,9 +165,6 @@ def loop2_brute():
     save_json(brute, 'brute_results.json')
     return brute
 
-# -----------------------
-# Loop 3: Final report
-# -----------------------
 def loop3_report():
     print("[+] Loop 3: Final Report")
     manual = load_json('manual_results.json')
@@ -203,13 +176,25 @@ def loop3_report():
     run_tool("node chatgpt_wrapper.js combined_results.json final_report.json")
 
     final = load_json('final_report.json')
+    report_text = final.get('report', 'No report generated.')
+
     print("\n=== Final Report ===")
-    print(final.get('report', 'No report generated.'))
+    print(report_text)
+    report_files = sorted(glob.glob("PenAI_PenTest_Report-*.txt"))
+    next_num = 1
+    if report_files:
+        nums = [
+            int(re.search(r"Report-(\d+)\.txt", f).group(1))
+            for f in report_files if re.search(r"Report-(\d+)\.txt", f)
+        ]
+        if nums:
+            next_num = max(nums) + 1
+    filename = f"PenAI_PenTest_Report-{next_num:02}.txt"
+    with open(filename, 'w') as f:
+        f.write(report_text)
+    print(f"[+] Report saved as: {filename}")
     return final
 
-# -----------------------
-# Main
-# -----------------------
 def main():
     if len(sys.argv) < 2:
         print("Usage: PenAI.py <target>")
@@ -229,4 +214,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
