@@ -51,7 +51,7 @@ If an admin login page was found, attempt to use "admin" as the username.
 Do not enumerate directories and use tools such as ffuf, gobuster, dirb, etc to enumerate directories. Ffuf may be used to fuzz parameters or objects if necessary.
 Do not recommend the same tool with the same arguments or parameters twice. Provide only the necessary tools; if there are no other tools then you may stop at providing only 1 or 2 tools.
 If you are suggesting to use a bruteforce tool to enumerate or fuzz a parameter or field such as hydra or ffuf, provide only one and do not suggest another tool. (e.g.: do not suggest both ffuf and hydra to fuzz user accounts as they provide the same function. For instance, if you have already suggested hydra, do not suggest ffuf). Ensure that there are variety within the tools suggested. If no other tools seem likely, then do not provide at all. Provide only one.
-
+If there is a specific vulnerability indicated from loop 1 such as SQLi or XSS, you may use the respective tools to further test for the payload such as sqlmap.
 
 Return valid JSON:
 {
