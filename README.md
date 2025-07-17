@@ -28,3 +28,19 @@ SSL log key file not functioning
 ```
 unset SSLKEYLOGFILE
 ```
+
+
+If you see an error like:
+```
+file:///home/kali/FYP1/node_modules/openai/index.mjs:48
+            throw new Errors.OpenAIError("The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).");
+                  ^
+
+OpenAIError: The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).
+    at new OpenAI (file:///home/kali/FYP1/node_modules/openai/index.mjs:48:19)
+    at file:///home/kali/FYP1/chatgpt_wrapper.js:7:16
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+```
+Reach out to borgor for the OpenAI API key
