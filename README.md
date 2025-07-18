@@ -12,7 +12,7 @@ export OPENAI_API_KEY="sk-proj-<YOUR KEY HERE>"
 
 In another terminal, launch your ZAP Proxy daemon:
 ```
-zaproxy -daemon -config 'api.addrs.addr.name=.*' -config api.addrs.addr.regex=true -port 8080
+zaproxy -daemon -port 8080 -config api.key= -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
 ```
 
 If you haven't got a vulnerable web application to test on, you can refer to my other repo for a simple, lightweight server you can use (https://github.com/BogusForlorn/vulnerable_web)
