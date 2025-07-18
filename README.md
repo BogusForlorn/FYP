@@ -1,6 +1,6 @@
 # PenAI 
 The heuristic penetration testing tool that integrates an LLM into the workflow by interfacing an LLM to invoke commands and adjusting according.
-You will need an OpenAI API key to run this tool. _if you don't have one, reach out to Borgor. He paid 5 USD for the API._
+You will need an OpenAI API key to run this tool. _if you don't have one, reach out to Borgor. He paid 5 USD for the API._ Kindly ensure your system has at least 4 physical cores allocated to it and at least 6 gb of ram (subprocesses of ZAProxy takes a lot of resources esp if you're running the vuln web server on the same machine)
 
 
 I haven't gotten around to making the script to setup. Just do the following to setup:
