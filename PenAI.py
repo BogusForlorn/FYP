@@ -1,46 +1,76 @@
 #!/usr/bin/env python3
 # PenAI.py
+
 import subprocess
 import json
 import os
 import sys
 import re
 import glob
+import time
+from collections import deque
+from pprint import pprint
+from zapv2 import ZAPv2
 
 MAX_SUMMARY_LEN = 300
 VERBOSE = True
 
 DEFAULT_TIMEOUT = 300
 LONG_TIMEOUT = 3600
-LONG_TIMEOUT_TOOLS = ['ffuf', 'sqlmap', 'gobuster']
+LONG_TIMEOUT_TOOLS = ['ffuf', 'sqlmap', 'gobuster', 'hydra']
+TAIL_LINE_LIMIT = 100
+
+ZAP_ADDRESS = '127.0.0.1'
+ZAP_PORT = '8080'
+ZAP_API_KEY = '' 
+ZAP = ZAPv2(
+    apikey=ZAP_API_KEY,
+    proxies={
+        'http': f'http://{ZAP_ADDRESS}:{ZAP_PORT}',
+        'https': f'http://{ZAP_ADDRESS}:{ZAP_PORT}'
+    }
+)
 
 def run_tool(command, capture=True, show_output=True):
     if command.startswith('$'):
         command = command[1:].strip()
 
     timeout = DEFAULT_TIMEOUT
+    limited_output = False
     for tool in LONG_TIMEOUT_TOOLS:
         if tool in command:
             timeout = LONG_TIMEOUT
+            limited_output = True
             break
 
     print(f"[+] Executing: {command}  (timeout={timeout}s)")
+
     try:
-        res = subprocess.run(
+        process = subprocess.Popen(
             command,
             shell=True,
-            capture_output=capture,
-            text=True,
-            timeout=timeout
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
         )
-        if show_output or VERBOSE:
-            if res.stdout:
-                print(res.stdout)
-            if res.stderr:
-                print(res.stderr)
-        if res.returncode != 0:
-            print(f"[!] Warning: exit code {res.returncode}")
-        return res.stdout.strip()
+
+        if capture and limited_output:
+            output_lines = deque(maxlen=TAIL_LINE_LIMIT)
+        else:
+            output_lines = []
+
+        for line in process.stdout:
+            print(line, end='')
+            if capture:
+                output_lines.append(line)
+
+        process.wait(timeout=timeout)
+        if process.returncode != 0:
+            print(f"[!] Warning: exit code {process.returncode}")
+
+        return ''.join(output_lines).strip() if capture else ''
+
     except subprocess.TimeoutExpired:
         print(f"[!] Command timed out after {timeout}s: {command}")
         return ""
@@ -85,19 +115,45 @@ def load_json(path):
 
 def zap_ajax_spider(target):
     print("[+] Starting ZAP AJAX Spider...")
-    zap_cmd = (
-        f"curl -s "
-        f"-H 'Accept: application/json' "
-        f"-X POST 'http://localhost:8080/JSON/spider/action/scan/?url=http://{target}'"
-    )
-    out = run_tool(zap_cmd)
-    try:
-        js = json.loads(out)
-        scan = js.get('scan', {})
-        return scan.get('urls', [])
-    except Exception:
-        print("[!] ZAP returned non‑JSON or no URLs.")
-        return []
+    context_name = "PenAI-Context"
+    contexts = ZAP.context.context_list
+    if context_name not in contexts:
+        ZAP.context.new_context(contextname=context_name)
+        ZAP.context.include_in_context(context_name, f"http://{target}.*")
+        print(f"[+] Created context '{context_name}' and added target to scope.")
+    else:
+        print(f"[+] Context '{context_name}' already exists.")
+
+    scan_id = ZAP.ajaxSpider.scan(url=f"http://{target}", contextname=context_name)
+    print(f"[+] AJAX Spider scan started (ID={scan_id})")
+
+    while ZAP.ajaxSpider.status != 'stopped':
+        time.sleep(1)
+
+    results = ZAP.ajaxSpider.results(start=0, count=1000)
+    urls = [entry.get('url') for entry in results if isinstance(entry, dict) and 'url' in entry]
+    print(f"[+] AJAX Spider completed; found {len(urls)} URLs.")
+    return urls
+
+def zap_active_scan(target):
+    print("[+] Starting ZAP Active Scan...")
+    scan_id = ZAP.ascan.scan(f"http://{target}")
+    while True:
+        status = ZAP.ascan.status(scan_id)
+        try:
+            pct = int(status)
+        except ValueError:
+            print(f"[!] Active scan status '{status}' not numeric, breaking")
+            break
+        if pct >= 100:
+            break
+        time.sleep(2)
+    print("[+] Active Scan complete.")
+    alerts = ZAP.core.alerts(baseurl=f"http://{target}")
+    # Only summary of alerts
+    summary = [{ 'alert': a.get('alert'), 'risk': a.get('risk'), 'url': a.get('url') } for a in alerts]
+    pprint(summary)
+    return summary
 
 def phase_0_recon(target, aggressive, zap_urls):
     recon = {"target": target, "dirs": [], "page_summaries": {}}
@@ -111,15 +167,12 @@ def phase_0_recon(target, aggressive, zap_urls):
         if os.path.exists('ffuf_out.json'):
             try:
                 data = json.load(open('ffuf_out.json'))
-                recon['dirs'] = [
-                    r['url'] for r in data.get('results', [])
-                    if 200 <= r.get('status', 0) < 300
-                ]
+                recon['dirs'] = [r['url'] for r in data.get('results', []) if 200 <= r.get('status', 0) < 300]
             except Exception as e:
                 print(f"[!] Failed to parse ffuf output: {e}")
 
     recon['dirs'].extend(zap_urls)
-    recon['dirs'] = list(set(recon['dirs'])) or [f"http://{target}/"]
+    recon['dirs'] = list(dict.fromkeys(recon['dirs'])) or [f"http://{target}/"]
 
     print("[+] Recon done; summarizing pages")
     for url in recon['dirs']:
@@ -133,7 +186,7 @@ def phase_0_recon(target, aggressive, zap_urls):
     return recon
 
 def loop1_manual():
-    print("[+] Loop 1: Manual injections")
+    print("[+] Loop 1: Manual injections")
     os.environ['PHASE'] = '1'
     os.environ.pop('AGGRESSIVE', None)
     run_tool("node chatgpt_wrapper.js recon.json manual.json")
@@ -149,10 +202,10 @@ def loop1_manual():
     return results
 
 def loop2_brute():
-    print("[+] Loop 2: Aggressive brute")
+    print("[+] Loop 2: Aggressive brute")
     os.environ['PHASE'] = '2'
     os.environ['AGGRESSIVE'] = '1'
-    run_tool("node chatgpt_wrapper.js recon.json bruteplan.json")
+    run_tool("node chatgpt_wrapper.js manual_results.json bruteplan.json")
     plan = load_json('bruteplan.json')
     brute = {'commands': [], 'results': []}
     for cmd in plan.get('commands', []):
@@ -166,29 +219,22 @@ def loop2_brute():
     return brute
 
 def loop3_report():
-    print("[+] Loop 3: Final Report")
+    print("[+] Loop 3: Final Report")
     manual = load_json('manual_results.json')
     brute = load_json('brute_results.json')
     combined = {'manual': manual, 'brute': brute}
     save_json(combined, 'combined_results.json')
-
     os.environ['PHASE'] = '3'
     run_tool("node chatgpt_wrapper.js combined_results.json final_report.json")
-
     final = load_json('final_report.json')
     report_text = final.get('report', 'No report generated.')
-
     print("\n=== Final Report ===")
     print(report_text)
     report_files = sorted(glob.glob("PenAI_PenTest_Report-*.txt"))
     next_num = 1
     if report_files:
-        nums = [
-            int(re.search(r"Report-(\d+)\.txt", f).group(1))
-            for f in report_files if re.search(r"Report-(\d+)\.txt", f)
-        ]
-        if nums:
-            next_num = max(nums) + 1
+        nums = [int(re.search(r"Report-(\d+)\.txt", f).group(1)) for f in report_files]
+        next_num = max(nums) + 1
     filename = f"PenAI_PenTest_Report-{next_num:02}.txt"
     with open(filename, 'w') as f:
         f.write(report_text)
@@ -200,16 +246,17 @@ def main():
         print("Usage: PenAI.py <target>")
         sys.exit(1)
     target = sys.argv[1].rstrip('/')
-    aggressive = input("Enable aggressive mode (Loop 2)? (y/n): ").lower().startswith('y')
+    aggressive = input("Enable aggressive mode (Loop 2)? (y/n): ").lower().startswith('y')
     use_zap = input("Use ZAP AJAX Spider? (y/n): ").lower().startswith('y')
-
     zap_urls = zap_ajax_spider(target) if use_zap else []
+    if aggressive and use_zap:
+        zap_active_scan(target)
     phase_0_recon(target, aggressive, zap_urls)
     loop1_manual()
     if aggressive:
         loop2_brute()
     else:
-        print("[+] Skipping Loop 2 (not aggressive).")
+        print("[+] Skipping Loop 2 (not aggressive)." )
     loop3_report()
 
 if __name__ == '__main__':
