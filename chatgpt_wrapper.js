@@ -23,13 +23,13 @@ async function main() {
 
   let prompt = '';
   if (phase === '1') {
-    // Loop 1: manual injections only
     prompt = `
 You are an AI pentesting assistant (Phase 1: Manual Injection).
 Recon data:
 ${JSON.stringify(data, null, 2)}
 
-Generate up to 5 manual injection payloads for common vulnerabilities (SQLi, XSS, parameter tampering) using simple curl or HTTP commands. Do NOT suggest automated tools like sqlmap or ffuf. Prefix each command with "$ ".
+Important: Do not include any explanation or formatting. Only return the raw JSON object with no surrounding text or code block.
+Generate up to 5 manual injection payloads for common vulnerabilities (SQLi, XSS, parameter tampering, OS command injection, etc) using simple curl or HTTP commands. Do NOT suggest automated tools like sqlmap or ffuf. Prefix each command with "$ ".
 If you are suggesting curl to test XSS, don't use <script>alert(1)</script> as it will not prompt any response on curl. Instead, use -X Post -d "content=<script>alert(1)</script>"
 Return valid JSON:
 {
@@ -39,12 +39,12 @@ Return valid JSON:
 }
 Only output this JSON.`;
   } else if (phase === '2') {
-    // Loop 2: aggressive tools only
     prompt = `
 You are an AI pentesting assistant (Phase 2: Aggressive Brute Forcing).
 Recon data:
 ${JSON.stringify(data, null, 2)}
 
+Important: Do not include any explanation or formatting. Only return the raw JSON object with no surrounding text or code block.
 Only suggest tools that test **new techniques** based on the weaknesses already identified. Do not repeat brute force tools like hydra and ffuf if credential fuzzing has already been attempted or if SQL injection has already bypassed login.
 Instead, escalate with tools like:
 - sqlmap if SQL injection is found,
@@ -64,7 +64,6 @@ For specific tools such as ffuf to enumerate credentials, ensure the output gene
 When suggesting tools like hydra, ensure that the port number is specified into the command.
 If using hydra, ensure that the command has the http-post-form that includes a failure page for failure to brute-force authentication bypass (http-post-form "F=Invalid").
 
-
 Return valid JSON:
 {
   "commands": ["$ command1", ...],
@@ -73,12 +72,12 @@ Return valid JSON:
 }
 Only output this JSON.`;
   } else if (phase === '3') {
-    // Loop 3: final report
     prompt = `
 You are an AI pentesting assistant (Phase 3: Reporting).
 Combined results:
 ${JSON.stringify(data, null, 2)}
 
+Important: Do not include any explanation or formatting. Only return the raw JSON object with no surrounding text or code block.
 Produce a concise, readable final report summarizing all findings.
 Write your report of the test using the following format:
 
@@ -88,17 +87,14 @@ Write your report of the test using the following format:
 ### Summary of Findings
 1. ...
 2. ...
-...
 
 ### Conclusion
 1. ...
 2. ...
-...
 
 ### Recommendations
 1. ...
-2. ..
-...
+2. ...
 
 Return valid JSON:
 {
@@ -115,13 +111,16 @@ Only output this JSON.`;
     model: 'gpt-4o-mini',
     messages: [{ role: 'user', content: prompt }]
   });
-  const reply = res.choices[0].message.content.trim();
 
-  if (isValidJSON(reply)) {
-    fs.writeFileSync(outputFile, reply);
+  const reply = res.choices[0].message.content.trim();
+  const cleaned = reply.replace(/```json|```/g, '').trim();
+
+  if (isValidJSON(cleaned)) {
+    fs.writeFileSync(outputFile, cleaned);
     console.log(`[+] Written to ${outputFile}`);
   } else {
     console.error('[!] LLM returned invalid JSON.');
+          console.log('[Raw LLM Reply]:\n', reply);
     fs.writeFileSync(
       outputFile,
       JSON.stringify({ report: 'Error: invalid LLM output', done: true }, null, 2)
