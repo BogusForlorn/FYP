@@ -22,7 +22,7 @@ TAIL_LINE_LIMIT = 100
 
 ZAP_ADDRESS = '127.0.0.1'
 ZAP_PORT = '8080'
-ZAP_API_KEY = '' 
+ZAP_API_KEY = ''
 ZAP = ZAPv2(
     apikey=ZAP_API_KEY,
     proxies={
@@ -150,14 +150,13 @@ def zap_active_scan(target):
         time.sleep(2)
     print("[+] Active Scan complete.")
     alerts = ZAP.core.alerts(baseurl=f"http://{target}")
-    # Only summary of alerts
     summary = [{ 'alert': a.get('alert'), 'risk': a.get('risk'), 'url': a.get('url') } for a in alerts]
     pprint(summary)
     return summary
 
-def phase_0_recon(target, aggressive, zap_urls):
+def phase_0_recon(target, aggressive, zap_urls, enumerate_dirs):
     recon = {"target": target, "dirs": [], "page_summaries": {}}
-    if aggressive:
+    if enumerate_dirs:
         cmd = (
             f"ffuf -u 'http://{target}/FUZZ' "
             "-w /usr/share/wordlists/dirb/common.txt "
@@ -227,9 +226,25 @@ def loop3_report():
     os.environ['PHASE'] = '3'
     run_tool("node chatgpt_wrapper.js combined_results.json final_report.json")
     final = load_json('final_report.json')
-    report_text = final.get('report', 'No report generated.')
+    report_data = final.get('report', 'No report generated.')
+
     print("\n=== Final Report ===")
+    if isinstance(report_data, dict):
+        # Format dictionary to readable text
+        formatted_report = []
+        for section, content in report_data.items():
+            formatted_report.append(f"\n### {section}")
+            if isinstance(content, list):
+                for i, item in enumerate(content, 1):
+                    formatted_report.append(f"{i}. {item}")
+            else:
+                formatted_report.append(str(content))
+        report_text = "\n".join(formatted_report)
+    else:
+        report_text = str(report_data)
+
     print(report_text)
+
     report_files = sorted(glob.glob("PenAI_PenTest_Report-*.txt"))
     next_num = 1
     if report_files:
@@ -241,6 +256,7 @@ def loop3_report():
     print(f"[+] Report saved as: {filename}")
     return final
 
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: PenAI.py <target>")
@@ -248,10 +264,11 @@ def main():
     target = sys.argv[1].rstrip('/')
     aggressive = input("Enable aggressive mode (Loop 2)? (y/n): ").lower().startswith('y')
     use_zap = input("Use ZAP AJAX Spider? (y/n): ").lower().startswith('y')
+    enumerate_dirs = input("Enumerate directories with ffuf? (y/n): ").lower().startswith('y')
     zap_urls = zap_ajax_spider(target) if use_zap else []
     if aggressive and use_zap:
         zap_active_scan(target)
-    phase_0_recon(target, aggressive, zap_urls)
+    phase_0_recon(target, aggressive, zap_urls, enumerate_dirs)
     loop1_manual()
     if aggressive:
         loop2_brute()
