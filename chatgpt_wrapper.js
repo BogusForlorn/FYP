@@ -54,7 +54,7 @@ Instead, escalate with tools like:
 - jwt_tool or JAWS if tokens are used,
 - others depending on context.
 
-Generate up to 3 commands for aggressive brute‑forcing tools (e.g. sqlmap, ffuf) recommended for pentesting this target. Prefix each with "$ ". If you need a wordlist, use /usr/share/seclists/Passwords/10k-most-common.txt for passwords and /usr/share/dirb/wordlists/common.txt for directory enumeration.
+Generate up to 3 commands for aggressive brute‑forcing tools (e.g. sqlmap, ffuf) recommended for pentesting this target. Prefix each with "$ ". If you need a wordlist, use /usr/share/wordlsts/rockyou.txt for passwords and /usr/share/dirb/wordlists/common.txt for directory enumeration.
 Do not use burpsuite as an aggressive brute-forcing tool.
 If an admin login page was found, attempt to use "admin" as the username.
 Do not enumerate directories and use tools such as ffuf, gobuster, dirb, etc to enumerate directories. Ffuf may be used to fuzz parameters or objects if necessary.
