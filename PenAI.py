@@ -31,6 +31,14 @@ ZAP = ZAPv2(
     }
 )
 
+def display_logo():
+    logo_path = os.path.join(os.path.dirname(__file__), 'logo.txt')
+    try:
+        with open(logo_path, 'r') as f:
+            print(f.read())
+    except FileNotFoundError:
+        print("[!] logo.txt not found. Continuing without logo.")
+
 def run_tool(command, capture=True, show_output=True):
     if command.startswith('$'):
         command = command[1:].strip()
@@ -230,7 +238,6 @@ def loop3_report():
 
     print("\n=== Final Report ===")
     if isinstance(report_data, dict):
-        # Format dictionary to readable text
         formatted_report = []
         for section, content in report_data.items():
             formatted_report.append(f"\n### {section}")
@@ -256,8 +263,8 @@ def loop3_report():
     print(f"[+] Report saved as: {filename}")
     return final
 
-
 def main():
+    display_logo()
     if len(sys.argv) < 2:
         print("Usage: PenAI.py <target>")
         sys.exit(1)
@@ -273,7 +280,7 @@ def main():
     if aggressive:
         loop2_brute()
     else:
-        print("[+] Skipping Loop 2 (not aggressive)." )
+        print("[+] Skipping Loop 2 (not aggressive).")
     loop3_report()
 
 if __name__ == '__main__':
